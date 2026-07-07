@@ -44,7 +44,8 @@ One command, every time - always includes your email, always refreshes data,
 then opens the dashboard:
 
 ```
-cd project-folder
+git clone https://github.com/HoyeonJoeKang/private-credit-due-diligence-platform.git
+cd private-credit-due-diligence-platform
 pip install -r requirements.txt
 python start.py your_email@example.com
 ```
