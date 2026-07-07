@@ -38,12 +38,6 @@ public SEC filings (10-Q/10-K) - no third-party data vendor required.**
 
 Python, pandas, BeautifulSoup/lxml, SQLite, Streamlit, Plotly
 
----
-
-Personal research project - a BDC portfolio risk monitoring / due diligence prototype
-built on public SEC filings (10-Q/10-K). Currently covers ARCC (Ares Capital) and
-BXSL (Blackstone Secured Lending Fund), 8 quarters each, fully validated end to end.
-
 ## Setup
 
 ```
