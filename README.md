@@ -3,8 +3,7 @@
 **A private credit portfolio risk monitoring and due diligence tool built directly on
 public SEC filings (10-Q/10-K) - no third-party data vendor required.**
 
-<!-- Add a dashboard screenshot here, e.g.: -->
-<!-- ![Dashboard Overview](screenshots/overview.png) -->
+![Dashboard Overview](screenshots/overview.png)
 
 ## Why This Project
 
@@ -37,6 +36,20 @@ public SEC filings (10-Q/10-K) - no third-party data vendor required.**
 ## Tech Stack
 
 Python, pandas, BeautifulSoup/lxml, SQLite, Streamlit, Plotly
+
+## Screenshots
+
+**Portfolio Composition**
+
+![Composition](screenshots/composition.png)
+
+**Watchlist**
+
+![Watchlist 1](screenshots/watchlist1.png)
+
+![Watchlist 2](screenshots/watchlist2.png)
+
+![Watchlist 3](screenshots/watchlist3.png)
 
 ## Quick Start
 
