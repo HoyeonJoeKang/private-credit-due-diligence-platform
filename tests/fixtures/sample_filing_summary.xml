@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FilingSummary>
+    <Version>3.24.5</Version>
+    <ReportFormat>Html</ReportFormat>
+    <MyReports>
+        <Report>
+            <IsDefault>true</IsDefault>
+            <HtmlFileName>R1.htm</HtmlFileName>
+            <LongName>0001001 - Document - Cover Page</LongName>
+            <ShortName>Cover Page</ShortName>
+            <MenuCategory>Cover</MenuCategory>
+            <Position>1</Position>
+        </Report>
+        <Report>
+            <HtmlFileName>R2.htm</HtmlFileName>
+            <LongName>0002002 - Statement - Consolidated Balance Sheets</LongName>
+            <ShortName>Consolidated Balance Sheets</ShortName>
+            <MenuCategory>Statements</MenuCategory>
+            <Position>2</Position>
+        </Report>
+        <Report>
+            <HtmlFileName>R5.htm</HtmlFileName>
+            <LongName>0002005 - Statement - Consolidated Schedule of Investments</LongName>
+            <ShortName>Consolidated Schedule of Investments</ShortName>
+            <MenuCategory>Statements</MenuCategory>
+            <Position>5</Position>
+        </Report>
+        <Report>
+            <HtmlFileName>R6.htm</HtmlFileName>
+            <LongName>0002006 - Statement - Consolidated Schedule of Investments (Parenthetical)</LongName>
+            <ShortName>Consolidated Schedule of Investments (Parenthetical)</ShortName>
+            <MenuCategory>Statements</MenuCategory>
+            <Position>6</Position>
+        </Report>
+        <Report>
+            <HtmlFileName>R163.htm</HtmlFileName>
+            <LongName>0003163 - Statement - Consolidated Statements of Cash Flows</LongName>
+            <ShortName>Consolidated Statements of Cash Flows</ShortName>
+            <MenuCategory>Statements</MenuCategory>
+            <Position>163</Position>
+        </Report>
+        <Report>
+            <HtmlFileName>R43.htm</HtmlFileName>
+            <LongName>9954717 - Disclosure - INVESTMENTS - Schedule of Investments (Details)</LongName>
+            <ShortName>INVESTMENTS - Schedule of Investments (Details)</ShortName>
+            <MenuCategory>Notes</MenuCategory>
+            <Position>43</Position>
+        </Report>
+    </MyReports>
+    <InputFiles>
+        <File>arcc-20260331.htm</File>
+    </InputFiles>
+</FilingSummary>
