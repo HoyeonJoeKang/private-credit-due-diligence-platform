@@ -58,18 +58,6 @@ and jumps straight to the dashboard - so this is the one command to use every ti
 first run or the hundredth. To force a fresh re-collection, delete
 `parsed/dd_platform.db` first (or run `python run_pipeline.py <email>` directly).
 
-SEC requires a real contact email in the User-Agent header for every request. This
-project never hardcodes an email - it's passed as a command-line argument to
-`run_pipeline.py`, or set programmatically via:
-
-```python
-from src.sec_client import set_contact_email
-set_contact_email("you@example.com")
-```
-
-The Streamlit dashboard itself never contacts SEC directly (it only reads the
-already-collected database), so no email is needed to run it.
-
 ## Completed (as of 2026-07-05)
 
 - Phase 1: Filing Discovery (`src/discovery.py`) - most recent 8 10-Q/10-K filings per company
