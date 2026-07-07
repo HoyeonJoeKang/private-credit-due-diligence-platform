@@ -38,12 +38,6 @@ public SEC filings (10-Q/10-K) - no third-party data vendor required.**
 
 Python, pandas, BeautifulSoup/lxml, SQLite, Streamlit, Plotly
 
-## Setup
-
-```
-pip install -r requirements.txt
-```
-
 ## Quick Start
 
 One command, every time - always includes your email, always refreshes data,
@@ -62,18 +56,6 @@ Streamlit dashboard. If the database already exists, it skips data collection en
 and jumps straight to the dashboard - so this is the one command to use every time,
 first run or the hundredth. To force a fresh re-collection, delete
 `parsed/dd_platform.db` first (or run `python run_pipeline.py <email>` directly).
-
-If you only want to view the dashboard without re-collecting data (e.g. you know the
-data hasn't changed), you can run the two steps separately:
-
-```
-python run_pipeline.py your_email@example.com
-streamlit run streamlit_app.py
-```
-
-`run_pipeline.py` collects 8 quarters of data for both ARCC and BXSL from SEC EDGAR
-(this takes a while - it's fetching and parsing real filings). Once it finishes,
-`parsed/dd_platform.db` contains everything the dashboard needs.
 
 SEC requires a real contact email in the User-Agent header for every request. This
 project never hardcodes an email - it's passed as a command-line argument to
