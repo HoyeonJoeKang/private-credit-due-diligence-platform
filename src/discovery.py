@@ -52,6 +52,47 @@ def discover_filings(ticker: str, cik_padded: str, cik: str, conn: sqlite3.Conne
     return selected
 
 
+def discover_amendments(ticker: str, cik_padded: str, cik: str, conn: sqlite3.Connection,
+                         cache_path: str | None = None) -> list[dict]:
+    data = fetch_json(submissions_url(cik_padded), cache_path=cache_path)
+
+    recent = data["filings"]["recent"]
+    forms = recent["form"]
+    accessions = recent["accessionNumber"]
+    filing_dates = recent["filingDate"]
+    report_dates = recent["reportDate"]
+    primary_docs = recent["primaryDocument"]
+
+    amendments = []
+    for form, acc, fdate, rdate, pdoc in zip(forms, accessions, filing_dates, report_dates, primary_docs):
+        if form in ("10-Q/A", "10-K/A"):
+            accession_nodash = acc.replace("-", "")
+            primary_doc_url = (
+                f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/{pdoc}"
+            )
+            amendments.append({
+                "accession": acc,
+                "form_type": form,
+                "filing_date": fdate,
+                "period_end": rdate,
+                "primary_doc_url": primary_doc_url,
+            })
+
+    now = datetime.now(timezone.utc).isoformat()
+    for a in amendments:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO filing_amendments
+            (accession, ticker, cik, form_type, filing_date, period_end, primary_doc_url, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (a["accession"], ticker, cik, a["form_type"], a["filing_date"],
+             a["period_end"], a["primary_doc_url"], now),
+        )
+    conn.commit()
+    return amendments
+
+
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, ".")

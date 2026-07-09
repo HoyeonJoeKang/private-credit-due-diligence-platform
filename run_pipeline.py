@@ -5,9 +5,9 @@ import pandas as pd
 from src.sec_client import set_contact_email
 from src.schema import init_db
 from config.companies import COMPANIES
-from src.discovery import discover_filings
-from src.fetch_balance_sheet import get_total_investments_fair_value
-from src.pipeline_phase4 import process_filing_soi
+from src.discovery import discover_filings, discover_amendments
+from src.fetch_balance_sheet import get_total_investments_fair_value, get_leverage_metrics
+from src.pipeline_phase4 import process_filing_soi, store_metric
 from src.pipeline_bxsl import process_filing_soi_bxsl
 
 
@@ -16,6 +16,13 @@ def run_arcc(conn):
     info = COMPANIES[ticker]
     discover_filings(ticker, info["cik_padded"], info["cik"], conn,
                       cache_path=f"raw/{ticker}/submissions.json")
+    amendments = discover_amendments(ticker, info["cik_padded"], info["cik"], conn,
+                                      cache_path=f"raw/{ticker}/submissions.json")
+    if amendments:
+        print(f"{ticker}: found {len(amendments)} amendment filing(s)")
+        for a in amendments:
+            print(f"  {a['form_type']} filed {a['filing_date']} amending period {a['period_end']}")
+
     filings_df = pd.read_sql(
         "SELECT * FROM filings WHERE ticker=? ORDER BY filing_date DESC", conn, params=(ticker,)
     )
@@ -27,12 +34,24 @@ def run_arcc(conn):
                                      f["period_end"], conn, target_millions)
         print(ticker, {k: v for k, v in result.items() if k != "page_indices"})
 
+        leverage = get_leverage_metrics(ticker, info["cik"], f["accession"], f["period_end"])
+        for metric_name, value in leverage.items():
+            store_metric(conn, f["accession"], ticker, metric_name, value, f["period_end"])
+        conn.commit()
+
 
 def run_bxsl(conn):
     ticker = "BXSL"
     info = COMPANIES[ticker]
     discover_filings(ticker, info["cik_padded"], info["cik"], conn,
                       cache_path=f"raw/{ticker}/submissions.json")
+    amendments = discover_amendments(ticker, info["cik_padded"], info["cik"], conn,
+                                      cache_path=f"raw/{ticker}/submissions.json")
+    if amendments:
+        print(f"{ticker}: found {len(amendments)} amendment filing(s)")
+        for a in amendments:
+            print(f"  {a['form_type']} filed {a['filing_date']} amending period {a['period_end']}")
+
     filings_df = pd.read_sql(
         "SELECT * FROM filings WHERE ticker=? ORDER BY filing_date DESC", conn, params=(ticker,)
     )
@@ -45,6 +64,11 @@ def run_bxsl(conn):
         result = process_filing_soi_bxsl(ticker, info["cik"], f["accession"], f["primary_doc_url"],
                                           f["period_end"], conn, target_total=target, unit_multiplier=1000.0)
         print(ticker, {k: v for k, v in result.items() if k != "page_indices"})
+
+        leverage = get_leverage_metrics(ticker, info["cik"], f["accession"], f["period_end"])
+        for metric_name, value in leverage.items():
+            store_metric(conn, f["accession"], ticker, metric_name, value, f["period_end"])
+        conn.commit()
 
 
 def main():

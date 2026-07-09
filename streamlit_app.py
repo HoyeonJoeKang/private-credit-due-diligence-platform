@@ -96,10 +96,16 @@ def load_data(db_path: str):
     filings = pd.read_sql("SELECT * FROM filings ORDER BY period_end", conn)
     holdings = pd.read_sql("SELECT * FROM portfolio_holdings", conn)
     quality = pd.read_sql("SELECT * FROM data_quality_checks", conn)
+    financial_metrics = pd.read_sql("SELECT * FROM financial_metrics", conn)
+    try:
+        amendments = pd.read_sql("SELECT * FROM filing_amendments ORDER BY filing_date", conn)
+    except Exception:
+        amendments = pd.DataFrame(columns=["accession", "ticker", "cik", "form_type",
+                                            "filing_date", "period_end", "primary_doc_url"])
     conn.close()
     holdings = holdings.merge(filings[["accession", "period_end"]], on="accession", how="left")
     holdings["investment_category"] = holdings["investment_type"].apply(categorize_investment_type)
-    return filings, holdings, quality
+    return filings, holdings, quality, amendments, financial_metrics
 
 
 st.set_page_config(page_title="Private Credit Due Diligence Platform", layout="wide")
@@ -159,7 +165,7 @@ if not os.path.exists(db_path):
     )
     st.stop()
 
-filings, holdings, quality = load_data(db_path)
+filings, holdings, quality, amendments, financial_metrics = load_data(db_path)
 
 if filings.empty:
     st.warning("The filings table is empty. Please run the data collection pipeline first.")
@@ -171,6 +177,8 @@ selected_ticker = st.sidebar.selectbox("Company", tickers)
 filings = filings[filings["ticker"] == selected_ticker].copy()
 holdings = holdings[holdings["ticker"] == selected_ticker].copy()
 quality = quality[quality["accession"].isin(filings["accession"])].copy()
+amendments = amendments[amendments["ticker"] == selected_ticker].copy() if not amendments.empty else amendments
+financial_metrics = financial_metrics[financial_metrics["ticker"] == selected_ticker].copy()
 
 st.sidebar.caption(f"{len(filings)} quarters loaded for {selected_ticker}")
 page = st.sidebar.radio("Section", ["Overview", "Composition", "Risk & Changes", "Watchlist", "Data Quality"])
@@ -241,6 +249,77 @@ if page == "Overview":
     fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=380,
                        margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig, width='stretch')
+
+    leverage_current = financial_metrics[
+        (financial_metrics["accession"] == current_accession)
+        & (financial_metrics["metric_name"].isin(
+            ["total_debt", "net_assets", "debt_to_equity", "cash_and_equivalents"]))
+    ].set_index("metric_name")["value"]
+
+    if not leverage_current.empty:
+        st.write("")
+        st.markdown("<div class='section-header'>Leverage &amp; Liquidity</div>", unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        total_debt = leverage_current.get("total_debt")
+        net_assets = leverage_current.get("net_assets")
+        debt_to_equity = leverage_current.get("debt_to_equity")
+        cash = leverage_current.get("cash_and_equivalents")
+        for col, label, value in zip(
+            [c1, c2, c3, c4],
+            ["Total Debt ($M)", "Net Assets / NAV ($M)", "Debt / Equity", "Cash & Equivalents ($M)"],
+            [f"{total_debt/1_000_000:,.1f}" if total_debt is not None else "N/A",
+             f"{net_assets/1_000_000:,.1f}" if net_assets is not None else "N/A",
+             f"{debt_to_equity:.2f}x" if debt_to_equity is not None else "N/A",
+             f"{cash/1_000_000:,.1f}" if cash is not None else "N/A"],
+        ):
+            col.markdown(
+                f"<div class='metric-card'><div class='metric-label'>{label}</div>"
+                f"<div class='metric-value'>{value}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        leverage_trend = financial_metrics[
+            financial_metrics["metric_name"] == "debt_to_equity"
+        ].sort_values("period_end")
+        if not leverage_trend.empty:
+            st.write("")
+            fig = px.line(leverage_trend, x="period_end", y="value", markers=True,
+                          color_discrete_sequence=[STEEL])
+            fig.update_layout(height=280, plot_bgcolor="white", paper_bgcolor="white",
+                              margin=dict(l=10, r=10, t=10, b=10), yaxis_title="Debt / Equity")
+            st.plotly_chart(fig, width='stretch')
+
+        debt_vs_equity = financial_metrics[
+            financial_metrics["metric_name"].isin(["total_debt", "net_assets"])
+        ].pivot_table(index="period_end", columns="metric_name", values="value").reset_index().sort_values("period_end")
+        cash_trend = financial_metrics[
+            financial_metrics["metric_name"] == "cash_and_equivalents"
+        ].sort_values("period_end")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if not debt_vs_equity.empty:
+                st.markdown("<div class='section-header' style='font-size:15px;'>Total Debt vs Net Assets</div>",
+                            unsafe_allow_html=True)
+                fig = go.Figure()
+                if "total_debt" in debt_vs_equity.columns:
+                    fig.add_trace(go.Scatter(x=debt_vs_equity["period_end"], y=debt_vs_equity["total_debt"],
+                                              name="Total Debt", line=dict(color=NAVY, width=3)))
+                if "net_assets" in debt_vs_equity.columns:
+                    fig.add_trace(go.Scatter(x=debt_vs_equity["period_end"], y=debt_vs_equity["net_assets"],
+                                              name="Net Assets", line=dict(color=ACCENT, width=3, dash="dot")))
+                fig.update_layout(height=280, plot_bgcolor="white", paper_bgcolor="white",
+                                  margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.15))
+                st.plotly_chart(fig, width='stretch')
+        with col_b:
+            if not cash_trend.empty:
+                st.markdown("<div class='section-header' style='font-size:15px;'>Cash &amp; Equivalents</div>",
+                            unsafe_allow_html=True)
+                fig = px.line(cash_trend, x="period_end", y="value", markers=True,
+                              color_discrete_sequence=[GREEN])
+                fig.update_layout(height=280, plot_bgcolor="white", paper_bgcolor="white",
+                                  margin=dict(l=10, r=10, t=10, b=10), yaxis_title="$")
+                st.plotly_chart(fig, width='stretch')
 
 elif page == "Composition":
     col1, col2 = st.columns(2)
@@ -414,6 +493,28 @@ elif page == "Risk & Changes":
                        margin=dict(l=10, r=10, t=10, b=10), yaxis_title="% of Fair Value")
     st.plotly_chart(fig, width='stretch')
 
+    if "pik_rate" in holdings.columns:
+        pik_trend = (
+            holdings.groupby("period_end")
+            .apply(lambda g: g[g["pik_rate"].notna()]["fair_value"].sum() / g["fair_value"].sum() * 100
+                   if g["fair_value"].sum() else 0, include_groups=False)
+            .reset_index(name="pik_pct")
+            .sort_values("period_end")
+        )
+        st.markdown("<div class='section-header'>PIK Income Trend</div>", unsafe_allow_html=True)
+        st.caption("Share of portfolio fair value earning payment-in-kind interest, by quarter")
+        fig = px.line(pik_trend, x="period_end", y="pik_pct", markers=True,
+                      color_discrete_sequence=[ORANGE])
+        fig.update_layout(height=300, plot_bgcolor="white", paper_bgcolor="white",
+                           margin=dict(l=10, r=10, t=10, b=10), yaxis_title="% of Fair Value")
+        st.plotly_chart(fig, width='stretch')
+
+        current_pik = current_holdings[current_holdings["pik_rate"].notna()]
+        if not current_pik.empty:
+            weighted_pik = (current_pik["pik_rate"] * current_pik["fair_value"]).sum() / current_pik["fair_value"].sum()
+            st.markdown(f"Weighted average PIK rate this quarter: **{weighted_pik:.2f}%**")
+
+
 elif page == "Watchlist":
     all_scores = compute_watchlist_scores(holdings)
     current_scores = all_scores[all_scores["period_end"] == selected_period].copy()
@@ -507,6 +608,19 @@ elif page == "Data Quality":
     st.dataframe(quality_display[display_order], width='stretch')
     download_button(quality_display[display_order], "Download reconciliation history (Excel)",
                      f"{selected_ticker}_reconciliation_history.xlsx", "dl_quality")
+
+    st.markdown("<div class='section-header'>Amendment Filings</div>", unsafe_allow_html=True)
+    st.caption(
+        "10-Q/A and 10-K/A filings indicate the company restated or corrected a previous filing. "
+        "These are flagged only, not re-parsed through the main pipeline."
+    )
+    if amendments.empty:
+        st.write("No amendment filings found for this company.")
+    else:
+        amendments_display = amendments.rename(columns={
+            "form_type": "Form Type", "filing_date": "Filed", "period_end": "Amends Period",
+        })
+        st.dataframe(amendments_display[["Form Type", "Filed", "Amends Period"]], width='stretch')
 
     st.markdown("<div class='section-header'>Field Coverage (Current Quarter)</div>", unsafe_allow_html=True)
     st.caption(

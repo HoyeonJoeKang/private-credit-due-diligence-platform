@@ -9,6 +9,7 @@ from src.footnote_legend import build_plain_text, find_non_accrual_footnote_cand
 from src.grade_distribution import parse_grade_distribution
 
 PCT_PATTERN = re.compile(r"(-?\d+\.?\d*)\s*%")
+PIK_PATTERN = re.compile(r"([\d.]+)\s*%\s*PIK", re.IGNORECASE)
 NAME_FOOTNOTE_SUFFIX_PATTERN = re.compile(r"\s*(\(\d+\))+\s*$")
 
 
@@ -27,7 +28,14 @@ def parse_pct(text) -> float | None:
     return float(m.group(1)) if m else None
 
 
-def _store_metric(conn, accession, ticker, metric_name, value, period_end):
+def parse_pik(text) -> float | None:
+    if text is None or pd.isna(text):
+        return None
+    m = PIK_PATTERN.search(str(text))
+    return float(m.group(1)) if m else None
+
+
+def store_metric(conn, accession, ticker, metric_name, value, period_end):
     if value is None:
         return
     conn.execute(
@@ -111,30 +119,33 @@ def process_filing_soi(ticker: str, cik: str, accession: str, primary_doc_url: s
              computed_total, diff_pct, int(passed), now),
         )
 
+    conn.execute("DELETE FROM portfolio_holdings WHERE accession = ?", (accession,))
+
     for _, row in line_level.iterrows():
         conn.execute(
             """
             INSERT OR REPLACE INTO portfolio_holdings
             (accession, ticker, issuer, industry, investment_type, reference_rate,
-             spread_pct, interest_rate_pct, principal, cost, fair_value, non_accrual, risk_rating)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             spread_pct, interest_rate_pct, pik_rate, principal, cost, fair_value, non_accrual, risk_rating)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 accession, ticker, normalize_issuer_name(row["Company_Filled"]), row["Sector"], row["Investment"],
                 row.get("Reference"), parse_pct(row.get("Spread")), parse_pct(row.get("Coupon")),
+                parse_pik(row.get("Coupon")),
                 to_float(row.get("Principal")), to_float(row.get("Amortized Cost")),
                 to_float(row.get("Fair Value")), int(row["non_accrual_flag"]), None,
             ),
         )
 
     for grade, stats in grade_info.get("current", {}).items():
-        _store_metric(conn, accession, ticker, f"grade_{grade}_fair_value_pct", stats["pct_fair_value"], period_end)
-        _store_metric(conn, accession, ticker, f"grade_{grade}_fair_value", stats["fair_value"], period_end)
-    _store_metric(conn, accession, ticker, "weighted_avg_grade",
+        store_metric(conn, accession, ticker, f"grade_{grade}_fair_value_pct", stats["pct_fair_value"], period_end)
+        store_metric(conn, accession, ticker, f"grade_{grade}_fair_value", stats["fair_value"], period_end)
+    store_metric(conn, accession, ticker, "weighted_avg_grade",
                    grade_info.get("weighted_avg_grade_current"), period_end)
-    _store_metric(conn, accession, ticker, "non_accrual_pct_fair_value_disclosed",
+    store_metric(conn, accession, ticker, "non_accrual_pct_fair_value_disclosed",
                    disclosed_non_accrual_fv_pct, period_end)
-    _store_metric(conn, accession, ticker, "non_accrual_pct_cost_disclosed",
+    store_metric(conn, accession, ticker, "non_accrual_pct_cost_disclosed",
                    disclosed_non_accrual_cost_pct, period_end)
 
     non_accrual_check_passed = None

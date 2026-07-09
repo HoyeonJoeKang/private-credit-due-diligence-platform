@@ -14,6 +14,17 @@ CREATE TABLE IF NOT EXISTS filings (
     fetched_at      TEXT
 );
 
+CREATE TABLE IF NOT EXISTS filing_amendments (
+    accession       TEXT PRIMARY KEY,
+    ticker          TEXT NOT NULL,
+    cik             TEXT NOT NULL,
+    form_type       TEXT NOT NULL,
+    filing_date     TEXT NOT NULL,
+    period_end      TEXT NOT NULL,
+    primary_doc_url TEXT,
+    fetched_at      TEXT
+);
+
 CREATE TABLE IF NOT EXISTS portfolio_holdings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     accession       TEXT NOT NULL REFERENCES filings(accession),
@@ -24,6 +35,7 @@ CREATE TABLE IF NOT EXISTS portfolio_holdings (
     reference_rate  TEXT,
     spread_pct      REAL,
     interest_rate_pct REAL,
+    pik_rate        REAL,
     principal       REAL,
     cost            REAL,
     fair_value      REAL,
@@ -74,11 +86,24 @@ CREATE TABLE IF NOT EXISTS data_quality_checks (
 """
 
 
+def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return {row[1] for row in cur.fetchall()}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    existing = _column_names(conn, "portfolio_holdings")
+    if "pik_rate" not in existing:
+        conn.execute("ALTER TABLE portfolio_holdings ADD COLUMN pik_rate REAL")
+        conn.commit()
+
+
 def init_db(db_path: str = "parsed/dd_platform.db") -> sqlite3.Connection:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA_SQL)
     conn.commit()
+    _migrate(conn)
     return conn
 
 

@@ -8,7 +8,7 @@ from src.fetch_soi_full import find_soi_page_tables_generic, to_float
 from src.soi_table import find_header_row_generic, collapse_grouped_columns
 from src.soi_table_bxsl import classify_and_assign_bxsl
 from src.footnote_legend import build_plain_text, find_non_accrual_footnote_candidates, footnotes_contain_number
-from src.pipeline_phase4 import normalize_issuer_name, parse_pct
+from src.pipeline_phase4 import normalize_issuer_name, parse_pct, parse_pik
 
 BXSL_SOI_REQUIRED_TERMS = ["Investments", "Fair Value", "Par Amount"]
 BXSL_HEADER_REQUIRED_TERMS = ["Investments", "Fair Value"]
@@ -95,6 +95,8 @@ def process_filing_soi_bxsl(ticker: str, cik: str, accession: str, primary_doc_u
     storage_scale = unit_multiplier / 1_000_000
     storable = investment_only
 
+    conn.execute("DELETE FROM portfolio_holdings WHERE accession = ?", (accession,))
+
     for _, row in storable.iterrows():
         reference_rate, spread_pct = parse_reference_and_spread(row.get("Reference Rate and Spread"))
         non_accrual_flag = 0
@@ -108,12 +110,13 @@ def process_filing_soi_bxsl(ticker: str, cik: str, accession: str, primary_doc_u
             """
             INSERT OR REPLACE INTO portfolio_holdings
             (accession, ticker, issuer, industry, investment_type, reference_rate,
-             spread_pct, interest_rate_pct, principal, cost, fair_value, non_accrual, risk_rating)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             spread_pct, interest_rate_pct, pik_rate, principal, cost, fair_value, non_accrual, risk_rating)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 accession, ticker, normalize_issuer_name(row["Investments"]), row["Sector"], row["AssetClass"],
                 reference_rate, spread_pct, parse_pct(row.get("Interest Rate")),
+                parse_pik(row.get("Interest Rate")),
                 to_float(row.get("Par Amount/Units")),
                 cost_val * storage_scale if cost_val is not None else None,
                 fair_value_val * storage_scale if fair_value_val is not None else None,
