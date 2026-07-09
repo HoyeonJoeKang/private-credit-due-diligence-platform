@@ -175,6 +175,38 @@ premature abstraction). For now, each company's fetch/parse layer lives in its o
 the analysis layer (Watchlist Score, IC Memo, MD&A extraction) is already company-agnostic and
 shared as-is.
 
+## Additional Modules (as of 2026-07-08)
+
+- **PIK income trend** (`src/pipeline_phase4.py:parse_pik`) - extracts the payment-in-kind
+  portion from coupon/interest rate text (e.g. `"9.45% (2.88% PIK)"`, `"10.60% (incl. 2.65%
+  PIK)"`) and stores it as `portfolio_holdings.pik_rate`. Exposed in the Streamlit dashboard
+  as a portfolio-wide PIK trend chart and weighted average PIK rate.
+- **Amendment filing detection** (`src/discovery.py:discover_amendments`) - flags 10-Q/A and
+  10-K/A filings in a separate `filing_amendments` table. Deliberately kept separate from the
+  main `filings` table and not re-parsed through the main pipeline, since an amendment may only
+  restate a specific section rather than the full filing.
+- **Generalized footnote legend parser** (`src/footnote_legend.py:parse_footnote_legend`) -
+  parses the entire footnote legend (not just the non-accrual footnote) into a `{number:
+  definition}` dictionary. Distinguishes the real legend from incidental footnote-reference
+  markers scattered throughout the Schedule of Investments table by requiring **strictly
+  sequential numbering** (8, 9, 10, 11...) rather than relying on a distance/proximity
+  heuristic - the Schedule of Investments table's footnote references are non-sequential and
+  repeat the same numbers many times, so this structural signal reliably separates the two.
+- **Leverage & Liquidity module** (`src/balance_sheet.py:extract_line_item`,
+  `src/fetch_balance_sheet.py:get_leverage_metrics`) - extracts Total Debt, Cash and Cash
+  Equivalents, Total Assets, and Total Liabilities from the Balance Sheet, and computes Net
+  Assets and Debt/Equity. Balance sheet labels for these line items aren't always identical
+  between filers (e.g. BXSL's "Debt" label includes a dynamic parenthetical note on
+  unamortized issuance costs), so extraction matches by **label prefix** rather than exact
+  string equality.
+- **Idempotent re-run fix**: `portfolio_holdings` previously relied solely on `INSERT OR
+  REPLACE` keyed on `(accession, issuer, investment_type, reference_rate, principal)`. Since
+  issuer name normalization logic changed several times during development, re-running the
+  pipeline with updated code left orphaned rows from earlier normalization versions in place
+  (they no longer matched the new key, so they were never replaced), silently inflating
+  portfolio totals on each re-run. Fixed by deleting all existing rows for an accession before
+  re-inserting, making the pipeline safe to re-run at any time regardless of code changes.
+
 ## Next Steps (Not Yet Implemented)
 
 - Further peer expansion beyond BXSL - would need to verify whether the grade system and
@@ -204,6 +236,18 @@ shared as-is.
 - The Grade Distribution table has the same pattern where a `%` sign is attached only to the
   first item and omitted afterward, so it's parsed by numeric position rather than relying on
   the symbol.
+- Line-item (per-portfolio-company) covenant compliance is not disclosed in these filings -
+  "covenant" only appears as part of the Grade Distribution's narrative definitions (e.g. what
+  a Grade 2 rating generally implies), not as a separate structured disclosure. Covenant terms
+  live in the private credit agreement, not the public 10-Q/10-K. What is disclosed and
+  extractable is the **BDC's own** debt covenants (leverage/asset coverage), which is what the
+  Leverage & Liquidity module covers instead.
+- Depending on the pandas/pyarrow version, `.astype(str)` on a column containing real `NaN`
+  values doesn't reliably coerce them to the string `"nan"` - the null can survive as a float
+  and later break any `.str` accessor method (e.g. `AttributeError: 'float' object has no
+  attribute 'startswith'`). Safer to convert element-wise with an explicit `pd.notna()` check
+  (see `extract_line_item`) rather than trusting `.astype(str)` alone when a column may contain
+  nulls.
 
 ## Design Principles (for future changes)
 
